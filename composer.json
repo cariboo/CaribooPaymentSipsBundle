@@ -1,0 +1,23 @@
+{
+    "name": "cariboo/payment-sips-bundle",
+    "type": "symfony-bundle",
+    "description": "Payment Bundle providing access to the SIPS API",
+    "keywords": ["payment", "SIPS"],
+    "homepage": "http://github.com/bundles/CaribooPaymentSipsBundle",
+    "license": "Apache2",
+    "authors": [
+        {
+            "name": "Stephane Decleire",
+            "email": "sdecleire@cariboo-networks.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.2",
+        "symfony/framework-bundle": ">=2.0,<2.2-dev",
+        "jms/payment-core-bundle": "dev-master"
+    },
+    "autoload": {
+        "psr-0": { "Cariboo\\Payment\\SipsBundle": "" }
+    },
+    "target-dir": "Cariboo/Payment/SipsBundle"
+}
