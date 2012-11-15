@@ -2,6 +2,7 @@
 
 namespace Cariboo\Payment\SipsBundle\Plugin;
 
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use JMS\Payment\CoreBundle\Model\ExtendedDataInterface;
 use JMS\Payment\CoreBundle\Model\FinancialTransactionInterface;
 use JMS\Payment\CoreBundle\Plugin\PluginInterface;
@@ -32,6 +33,8 @@ use Cariboo\Payment\SipsBundle\Client\Response;
 
 class SipsCheckoutPlugin extends AbstractPlugin
 {
+    protected $container;
+
     /**
      * @var string
      */
@@ -43,6 +46,11 @@ class SipsCheckoutPlugin extends AbstractPlugin
     protected $cancelUrl;
 
     /**
+     * @var string
+     */
+    protected $notifyUrl;
+
+    /**
      * @var \Cariboo\Payment\SipsBundle\Client\Client
      */
     protected $client;
@@ -50,116 +58,40 @@ class SipsCheckoutPlugin extends AbstractPlugin
     /**
      * @param string $returnUrl
      * @param string $cancelUrl
+     * @param string $notifyUrl
      * @param \Cariboo\Payment\SipsBundle\Client\Client $client
      */
-    public function __construct($returnUrl, $cancelUrl, Client $client)
+    public function __construct(ContainerInterface $container, Client $client , $returnUrl, $cancelUrl, $notifyUrl)
     {
-        $this->client = $client;
-        $this->returnUrl = $returnUrl;
-        $this->cancelUrl = $cancelUrl;
-    }
-
-    public function approve(FinancialTransactionInterface $transaction, $retry)
-    {
-        $this->createCheckoutBillingAgreement($transaction, 'Authorization');
+        $this->container    = $container;
+        $this->client       = $client;
+        $this->returnUrl    = $returnUrl;
+        $this->cancelUrl    = $cancelUrl;
+        $this->notifyUrl    = $notifyUrl;
     }
 
     public function approveAndDeposit(FinancialTransactionInterface $transaction, $retry)
     {
-        $this->createCheckoutBillingAgreement($transaction, 'Sale');
-    }
-
-    public function credit(FinancialTransactionInterface $transaction, $retry)
-    {
-        $data = $transaction->getExtendedData();
-        $approveTransaction = $transaction->getCredit()->getPayment()->getApproveTransaction();
-
-        $parameters = array();
-        if (Number::compare($transaction->getRequestedAmount(), $approveTransaction->getProcessedAmount()) !== 0) {
-            $parameters['REFUNDTYPE'] = 'Partial';
-            $parameters['AMT'] = $this->client->convertAmountToPaypalFormat($transaction->getRequestedAmount());
-            $parameters['CURRENCYCODE'] = $transaction->getCredit()->getPaymentInstruction()->getCurrency();
+        $request = $this->container->get('request');
+        if ($request->isMethod('POST')) {
+            $postData = $request->request->get('data');
+            $data = $postData['DATA'];
         }
+        // $form = $this->container->get('form.factory')->createFormBuilder()
+        //     ->add('DATA', 'text')
+        //     ->getForm();
 
-        $response = $this->client->requestRefundTransaction($data->get('authorization_id'), $parameters);
+        // if ($request->isMethod('POST')) {
+        //     $form->bind($request);
+        //     $data = $form->getData();
+        // }
 
-        $this->throwUnlessSuccessResponse($response, $transaction);
-
-        $transaction->setReferenceNumber($response->body->get('REFUNDTRANSACTIONID'));
-        $transaction->setProcessedAmount($response->body->get('NETREFUNDAMT'));
-        $transaction->setResponseCode(PluginInterface::RESPONSE_CODE_SUCCESS);
-    }
-
-    public function deposit(FinancialTransactionInterface $transaction, $retry)
-    {
-        $data = $transaction->getExtendedData();
-        $authorizationId = $transaction->getPayment()->getApproveTransaction()->getReferenceNumber();
-
-        if (Number::compare($transaction->getPayment()->getApprovedAmount(), $transaction->getRequestedAmount()) === 0) {
-            $completeType = 'Complete';
-        }
-        else {
-            $completeType = 'NotComplete';
-        }
-
-        $response = $this->client->requestDoCapture($authorizationId, $transaction->getRequestedAmount(), $completeType, array(
-            'CURRENCYCODE' => $transaction->getPayment()->getPaymentInstruction()->getCurrency(),
-        ));
-        $this->throwUnlessSuccessResponse($response, $transaction);
-
-        $details = $this->client->requestGetTransactionDetails($authorizationId);
-        $this->throwUnlessSuccessResponse($details, $transaction);
-
-        switch ($details->body->get('PAYMENTSTATUS')) {
-            case 'Completed':
-                break;
-
-            case 'Pending':
-                throw new PaymentPendingException('Payment is still pending: '.$response->body->get('PENDINGREASON'));
-
-            default:
-                $ex = new FinancialException('PaymentStatus is not completed: '.$response->body->get('PAYMENTSTATUS'));
-                $ex->setFinancialTransaction($transaction);
-                $transaction->setResponseCode('Failed');
-                $transaction->setReasonCode($response->body->get('PAYMENTSTATUS'));
-
-                throw $ex;
-        }
-
-        $transaction->setReferenceNumber($authorizationId);
-        $transaction->setProcessedAmount($details->body->get('AMT'));
-        $transaction->setResponseCode(PluginInterface::RESPONSE_CODE_SUCCESS);
-        $transaction->setReasonCode(PluginInterface::REASON_CODE_SUCCESS);
-    }
-
-    public function reverseApproval(FinancialTransactionInterface $transaction, $retry)
-    {
         $data = $transaction->getExtendedData();
 
-        $response = $this->client->requestDoVoid($data->get('authorization_id'));
-        $this->throwUnlessSuccessResponse($response, $transaction);
+        $token = $this->obtainSipsCheckoutToken($transaction, $paymentAction);
 
-        $transaction->setResponseCode(PluginInterface::RESPONSE_CODE_SUCCESS);
-    }
-
-    public function processes($paymentSystemName)
-    {
-        return 'sips_checkout' === $paymentSystemName;
-    }
-
-    public function isIndependentCreditSupported()
-    {
-        return false;
-    }
-
-    protected function createCheckoutBillingAgreement(FinancialTransactionInterface $transaction, $paymentAction)
-    {
-        $data = $transaction->getExtendedData();
-
-        $token = $this->obtainExpressCheckoutToken($transaction, $paymentAction);
-
-        $details = $this->client->requestGetExpressCheckoutDetails($token);
-        $this->throwUnlessSuccessResponse($details, $transaction);
+        // $details = $this->client->requestGetExpressCheckoutDetails($token);
+        // $this->throwUnlessSuccessResponse($details, $transaction);
 
         // verify checkout status
         switch ($details->body->get('CHECKOUTSTATUS')) {
@@ -239,63 +171,83 @@ class SipsCheckoutPlugin extends AbstractPlugin
         $transaction->setReasonCode(PluginInterface::REASON_CODE_SUCCESS);
     }
 
+    public function processes($paymentSystemName)
+    {
+        return 'sips_checkout' === $paymentSystemName;
+    }
+
+    public function isIndependentCreditSupported()
+    {
+        return false;
+    }
+
     /**
      * @param \JMS\Payment\CoreBundle\Model\FinancialTransactionInterface $transaction
-     * @param string $paymentAction
-     *
-     * @throws \JMS\Payment\CoreBundle\Plugin\Exception\ActionRequiredException if user has to authenticate the token
-     *
      * @return string
      */
-    protected function obtainExpressCheckoutToken(FinancialTransactionInterface $transaction, $paymentAction)
+    protected function obtainSipsCheckoutToken(FinancialTransactionInterface $transaction)
     {
         $data = $transaction->getExtendedData();
         if ($data->has('sips_checkout_token')) {
             return $data->get('sips_checkout_token');
         }
 
-        $opts = $data->has('checkout_params') ? $data->get('checkout_params') : array();
-        $opts['PAYMENTREQUEST_0_PAYMENTACTION'] = $paymentAction;
-        $opts['PAYMENTREQUEST_0_CURRENCYCODE'] = $transaction->getPayment()->getPaymentInstruction()->getCurrency();
+        $opts = array();
+        $opts['normal_return_url'] = $this->getReturnUrl($data);
+        $opts['cancel_return_url'] = $this->getCancelUrl($data);
+        $opts['automatic_response_url'] = $this->getNotifyUrl($data);
 
-        if ($data->has('checkout_items'))
-        {
-            $itemsAmount = 0.00;
-            $idx = 0;
-            foreach($data->get('checkout_items') as $item)
-            {
-                $opts['L_PAYMENTREQUEST_0_ITEMCATEGORY' . $idx] = $item['category'];
-                $opts['L_PAYMENTREQUEST_0_NAME' . $idx] = $item['label'];
-                $opts['L_PAYMENTREQUEST_0_QTY' . $idx] = $item['quantity'];
-                $opts['L_PAYMENTREQUEST_0_AMT' . $idx] = $item['unit_price'];
-                $itemsAmount += $item['unit_price'] * $item['quantity'];
-                $idx++;
-            }
-            $opts['PAYMENTREQUEST_0_ITEMAMT'] = $itemsAmount;
-        }
+    //      $parm="$parm transaction_id=123456";
+    //      $parm="$parm language=fr";
+    //      $parm="$parm payment_means=CB,2,VISA,2,MASTERCARD,2";
+    //      $parm="$parm header_flag=no";
+    //      $parm="$parm capture_day=";
+    //      $parm="$parm capture_mode=";
+    //      $parm="$parm bgcolor=";
+    //      $parm="$parm block_align=";
+    //      $parm="$parm block_order=";
+    //      $parm="$parm textcolor=";
+    //      $parm="$parm receipt_complement=";
+    //      $parm="$parm caddie=mon_caddie";
+    //      $parm="$parm customer_id=";
+    //      $parm="$parm customer_email=";
+    //      $parm="$parm customer_ip_address=";
+    //      $parm="$parm data=";
+    //      $parm="$parm return_context=";
+    //      $parm="$parm target=";
+    //      $parm="$parm order_id=";
 
-        $response = $this->client->requestSetExpressCheckout(
-            $transaction->getRequestedAmount(),
-            $this->getReturnUrl($data),
-            $this->getCancelUrl($data),
-            $opts
-        );
+    //      $parm="$parm normal_return_logo=";
+    //      $parm="$parm cancel_return_logo=";
+    //      $parm="$parm submit_logo=";
+    //      $parm="$parm logo_id=";
+    //      $parm="$parm logo_id2=";
+    //      $parm="$parm advert=";
+    //      $parm="$parm background_id=";
+    //      $parm="$parm templatefile=";
+
+        // $trackingId = $this->getTrackingId();
+        // $transaction->setTrackingId($trackingId);
+        // $this->container->get('logger')->info('session: '.$transaction->getTrackingId());    
+
+        // $response = $this->client->requestGetToken($service, $trackingId, $subscription, $this->container->get('logger'));
+        $amount = $transaction->getRequestedAmount();
+        $currency = $transaction->getPayment()->getPaymentInstruction()->getCurrency();
+
+        $response = $this->client->requestGetCheckoutToken($amount, $currency, $opts);
         $this->throwUnlessSuccessResponse($response, $transaction);
 
-        $data->set('sips_checkout_token', $response->body->get('TOKEN'));
+        $token = $response->body->get('message');
+        $data->set('sips_checkout_token', $token);
 
-        $authenticateTokenUrl = $this->client->getAuthenticateExpressCheckoutTokenUrl($response->body->get('TOKEN'));
+        // $transaction->setState(FinancialTransactionInterface::STATE_PENDING);
 
-        $actionRequest = new ActionRequiredException('User must authorize the transaction.');
-        $actionRequest->setFinancialTransaction($transaction);
-        $actionRequest->setAction(new VisitUrl($authenticateTokenUrl));
-
-        throw $actionRequest;
+        return $token;
     }
 
     /**
      * @param \JMS\Payment\CoreBundle\Model\FinancialTransactionInterface $transaction
-     * @param \JMS\Payment\PaypalBundle\Client\Response $response
+     * @param \JMS\Payment\SipsBundle\Client\Response $response
      * @return null
      * @throws \JMS\Payment\CoreBundle\Plugin\Exception\FinancialException
      */
@@ -305,8 +257,8 @@ class SipsCheckoutPlugin extends AbstractPlugin
             return;
         }
 
-        $transaction->setResponseCode($response->body->get('ACK'));
-        $transaction->setReasonCode($response->body->get('L_ERRORCODE0'));
+        $transaction->setResponseCode('Failed');
+        $transaction->setReasonCode('APICallFailed');
 
         $ex = new FinancialException('SIPS-Response was not successful: '.$response);
         $ex->setFinancialTransaction($transaction);
@@ -316,8 +268,8 @@ class SipsCheckoutPlugin extends AbstractPlugin
 
     protected function getReturnUrl(ExtendedDataInterface $data)
     {
-        if ($data->has('return_url')) {
-            return $data->get('return_url');
+        if ($data->has('normal_return_url')) {
+            return $data->get('normal_return_url');
         }
         else if (0 !== strlen($this->returnUrl)) {
             return $this->returnUrl;
@@ -328,13 +280,25 @@ class SipsCheckoutPlugin extends AbstractPlugin
 
     protected function getCancelUrl(ExtendedDataInterface $data)
     {
-        if ($data->has('cancel_url')) {
-            return $data->get('cancel_url');
+        if ($data->has('cancel_return_url')) {
+            return $data->get('cancel_return_url');
         }
         else if (0 !== strlen($this->cancelUrl)) {
             return $this->cancelUrl;
         }
 
-        throw new \RuntimeException('You must configure a cancel url.');
+        throw new \RuntimeException('You must configure a cancellation url.');
+    }
+
+    protected function getNotifyUrl(ExtendedDataInterface $data)
+    {
+        if ($data->has('automatic_response_url')) {
+            return $data->get('automatic_response_url');
+        }
+        else if (0 !== strlen($this->notifyUrl)) {
+            return $this->notifyUrl;
+        }
+
+        throw new \RuntimeException('You must configure a notification url.');
     }
 }

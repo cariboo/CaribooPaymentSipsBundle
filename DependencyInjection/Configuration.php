@@ -29,11 +29,14 @@ class Configuration
         return $tb
             ->root('cariboo_payment_sips', 'array')
                 ->children()
+                    ->scalarNode('pathfile')->isRequired()->cannotBeEmpty()->end()
+                    ->scalarNode('request_path')->isRequired()->cannotBeEmpty()->end()
+                    ->scalarNode('response_path')->isRequired()->cannotBeEmpty()->end()
                     ->scalarNode('merchant_id')->isRequired()->cannotBeEmpty()->end()
                     ->scalarNode('merchant_country')->isRequired()->cannotBeEmpty()->end()
                     ->scalarNode('normal_return_url')->defaultNull()->end()
                     ->scalarNode('cancel_return_url')->defaultNull()->end()
-                    ->booleanNode('debug')->defaultValue('%kernel.debug%')->end()
+                    ->scalarNode('automatic_response_url')->defaultNull()->end()
                 ->end()
             ->end()
             ->buildTree();

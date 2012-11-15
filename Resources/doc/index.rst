@@ -11,11 +11,12 @@ Configuration
 ::
 
     // YAML
-    jms_payment_paypal:
-        username: your api username (not your account username)
-        password: your api password (not your account password)
-        signature: your api signature
-        debug: true/false # when true, connect to PayPal sandbox; uses kernel debug value when not specified
+    cariboo_payment_sips:
+        pathfile: the path to the pathfile configuration file of the SIPS API
+        request_path: the path to the request binary of the SIPS API
+        reponse_path: the path to the response binary of the SIPS API
+        merchant_id: your Merchant ID
+        merchant_country: your country code (ISO 3166)
 
 
 =====
@@ -30,8 +31,8 @@ Without the Payment Plugin Controller
 The Payment Plugin Controller is made available by the CoreBundle and basically is the 
 interface to a persistence backend like the Doctrine ORM. It also performs additional 
 integrity checks to validate transactions. If you don't need these checks, and only want 
-an easy way to communicate with the Paypal API, then you can use the plugin directly::
+an easy way to communicate with the SIPS API, then you can use the plugin directly::
 
-    $plugin = $container->get('payment.plugin.paypal_express_checkout');
+    $plugin = $container->get('payment.plugin.sips_checkout');
 
 .. _JMSPaymentCoreBundle: https://github.com/schmittjoh/JMSPaymentCoreBundle/blob/master/Resources/doc/index.rst

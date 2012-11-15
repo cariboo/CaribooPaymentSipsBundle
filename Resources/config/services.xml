@@ -8,35 +8,35 @@
         <parameter key="payment.plugin.sips_checkout.class">Cariboo\Payment\SipsBundle\Plugin\SipsCheckoutPlugin</parameter>
         <parameter key="payment.sips.checkout.normal_return_url"></parameter>
         <parameter key="payment.sips.checkout.cancel_return_url"></parameter>
-
-        <parameter key="payment.sips.authentication_strategy.token.class">Cariboo\Payment\SipsBundle\Client\Authentication\TokenAuthenticationStrategy</parameter>
-        <parameter key="payment.sips.merchant_id"></parameter>
-        <parameter key="payment.sips.merchant_country"></parameter>
-        
-        <parameter key="payment.form.sips_checkout_type.class">Cariboo\Payment\SipsBundle\Form\SipsCheckoutType</parameter>
+        <parameter key="payment.sips.checkout.automatic_response_url"></parameter>
 
         <parameter key="payment.sips.client.class">Cariboo\Payment\SipsBundle\Client\Client</parameter>
+
+        <parameter key="payment.sips.merchant_id"></parameter>
+        <parameter key="payment.sips.merchant_country"></parameter>
+        <parameter key="payment.sips.pathfile"></parameter>
+        <parameter key="payment.sips.request_path"></parameter>
+        <parameter key="payment.sips.response_path"></parameter>
+
+        <parameter key="payment.form.sips_checkout_type.class">Cariboo\Payment\SipsBundle\Form\SipsCheckoutType</parameter>
     </parameters>
 
     <services>
-        <service id="payment.sips.authentication_strategy.token" class="%payment.sips.authentication_strategy.token.class%">
-            <argument>%payment.sips.merchant_id%</argument>
-            <argument>%payment.sips.merchant_country%</argument>
-        </service>
-
-        <service id="payment.sips.authentication_strategy" alias="payment.sips.authentication_strategy.token" />
-
         <service id="payment.plugin.sips_checkout" class="%payment.plugin.sips_checkout.class%">
+            <argument type="service" id="service_container" />
+            <argument type="service" id="payment.sips.client" />
             <argument>%payment.sips.checkout.normal_return_url%</argument>
             <argument>%payment.sips.checkout.cancel_return_url%</argument>
-            <argument type="service" id="payment.sips.client" />
+            <argument>%payment.sips.checkout.automatic_response_url%</argument>
             <tag name="payment.plugin" />
         </service>
 
-        <service id="payment.paypal.client" class="%payment.sips.client.class%">
-            <argument type="service" id="payment.sips.authentication_strategy" />
-            <argument>%payment.sips.debug%</argument>
-            <argument>%payment.sips.digital%</argument>
+        <service id="payment.sips.client" class="%payment.sips.client.class%">
+            <argument>%payment.sips.merchant_id%</argument>
+            <argument>%payment.sips.merchant_country%</argument>
+            <argument>%payment.sips.pathfile%</argument>
+            <argument>%payment.sips.request_path%</argument>
+            <argument>%payment.sips.response_path%</argument>
         </service>
         
         <service id="payment.form.sips_checkout_type" class="%payment.form.sips_checkout_type.class%">
