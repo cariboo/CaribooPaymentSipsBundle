@@ -8,6 +8,7 @@
         <parameter key="payment.plugin.sips_checkout.class">Cariboo\Payment\SipsBundle\Plugin\SipsCheckoutPlugin</parameter>
         <parameter key="payment.sips.checkout.normal_return_url"></parameter>
         <parameter key="payment.sips.checkout.cancel_return_url"></parameter>
+        <parameter key="payment.sips.checkout.choose_card_url"></parameter>
         <parameter key="payment.sips.checkout.automatic_response_url"></parameter>
 
         <parameter key="payment.sips.client.class">Cariboo\Payment\SipsBundle\Client\Client</parameter>
@@ -27,6 +28,7 @@
             <argument type="service" id="payment.sips.client" />
             <argument>%payment.sips.checkout.normal_return_url%</argument>
             <argument>%payment.sips.checkout.cancel_return_url%</argument>
+            <argument>%payment.sips.checkout.choose_card_url%</argument>
             <argument>%payment.sips.checkout.automatic_response_url%</argument>
             <tag name="payment.plugin" />
         </service>
@@ -37,6 +39,7 @@
             <argument>%payment.sips.pathfile%</argument>
             <argument>%payment.sips.request_path%</argument>
             <argument>%payment.sips.response_path%</argument>
+            <argument>%payment.sips.debug%</argument>
         </service>
         
         <service id="payment.form.sips_checkout_type" class="%payment.form.sips_checkout_type.class%">

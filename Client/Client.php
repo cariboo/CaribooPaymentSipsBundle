@@ -38,14 +38,16 @@ class Client
     protected $pathfile;        // Path of the configuration file
     protected $requestPath;     // Path of the request binary from the SIPS API
     protected $responsePath;    // Path of the response binary from the SPIS API
+    protected $isDebug;         // Debug mode (SIPS test environment)
 
-    public function __construct($merchantId, $country, $pathfile, $requestPath, $responsePath)
+    public function __construct($merchantId, $country, $pathfile, $requestPath, $responsePath, $isDebug)
     {
-        $this->merchantId = $merchantId;
-        $this->country = $country;
-        $this->pathfile = $pathfile;
-        $this->requestPath = $requestPath;
+        $this->merchantId   = $merchantId;
+        $this->country      = $country;
+        $this->pathfile     = $pathfile;
+        $this->requestPath  = $requestPath;
         $this->responsePath = $responsePath;
+        $this->isDebug      = !!$isDebug;
     }
 
     /**
@@ -60,11 +62,11 @@ class Client
     public function requestGetCheckoutToken($amount, $currency, array $parameters = array())
     {
         return $this->sendApiRequest($this->requestPath, array_merge($parameters, array(
-            "merchant_id" => $this->merchantId,
-            "merchant_country" => $this->country,
-            "pathfile" => $this->pathfile,
-            "amount" => $this->convertAmountToSipsFormat($amount),
-            "currency_code" => $this->getCurrencyCode($currency)
+            "merchant_id"       => $this->merchantId,
+            "merchant_country"  => $this->country,
+            "pathfile"          => $this->pathfile,
+            "amount"            => $this->convertAmountToSipsFormat($amount),
+            "currency_code"     => $this->getCurrencyCode($currency)
         )));
     }
 
@@ -78,8 +80,8 @@ class Client
     public function requestDoCheckoutPayment($encryptedData)
     {
         return $this->sendApiRequest($this->responsePath, array(
-            "pathfile" => $this->pathfile,
-            "message" => $encryptedData
+            "pathfile"  => $this->pathfile,
+            "message"   => $encryptedData
         ));
     }
 
@@ -102,6 +104,11 @@ class Client
         return $response;
     }
 
+    public function getCallPaymentUrl()
+    {
+        return $this->isDebug ? 'https://payment.sips-atos.com:443/cgis-payment/demo/callpayment' : 'https://payment.sips-atos.com:443/cgis-payment/prod/callpayment';
+    }
+
     /**
      * Convert amounts in the format waited by Sips
      *
@@ -110,7 +117,7 @@ class Client
      */
     protected function convertAmountToSipsFormat($amount)
     {
-        return number_format($amount, 2, '.', '');
+        return number_format($amount * 100, 0, '.', '');
     }
 
     /**

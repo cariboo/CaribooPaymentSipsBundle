@@ -35,13 +35,15 @@ class CaribooPaymentSipsExtension extends Extension
         $xmlLoader = new XmlFileLoader($container, new FileLocator(__DIR__.'/../Resources/config'));
         $xmlLoader->load('services.xml');
 
+        $container->setParameter('payment.sips.merchant_id', $config['merchant_id']);
+        $container->setParameter('payment.sips.merchant_country', $config['merchant_country']);
         $container->setParameter('payment.sips.pathfile', $config['pathfile']);
         $container->setParameter('payment.sips.request_path', $config['request_path']);
         $container->setParameter('payment.sips.response_path', $config['response_path']);
-        $container->setParameter('payment.sips.merchant_id', $config['merchant_id']);
-        $container->setParameter('payment.sips.merchant_country', $config['merchant_country']);
         $container->setParameter('payment.sips.normal_return_url', $config['normal_return_url']);
         $container->setParameter('payment.sips.cancel_return_url', $config['cancel_return_url']);
+        $container->setParameter('payment.sips.choose_card_url', $config['choose_card_url']);
         $container->setParameter('payment.sips.automatic_response_url', $config['automatic_response_url']);
+        $container->setParameter('payment.sips.debug', $config['debug']);
     }
 }

@@ -36,6 +36,11 @@ class SipsCheckoutPlugin extends AbstractPlugin
     protected $container;
 
     /**
+     * @var \Cariboo\Payment\SipsBundle\Client\Client
+     */
+    protected $client;
+
+    /**
      * @var string
      */
     protected $returnUrl;
@@ -48,12 +53,12 @@ class SipsCheckoutPlugin extends AbstractPlugin
     /**
      * @var string
      */
-    protected $notifyUrl;
+    protected $chooseUrl;
 
     /**
-     * @var \Cariboo\Payment\SipsBundle\Client\Client
+     * @var string
      */
-    protected $client;
+    protected $notifyUrl;
 
     /**
      * @param string $returnUrl
@@ -61,22 +66,39 @@ class SipsCheckoutPlugin extends AbstractPlugin
      * @param string $notifyUrl
      * @param \Cariboo\Payment\SipsBundle\Client\Client $client
      */
-    public function __construct(ContainerInterface $container, Client $client , $returnUrl, $cancelUrl, $notifyUrl)
+    public function __construct(ContainerInterface $container, Client $client , $returnUrl, $cancelUrl, $chooseUrl, $notifyUrl)
     {
         $this->container    = $container;
         $this->client       = $client;
         $this->returnUrl    = $returnUrl;
         $this->cancelUrl    = $cancelUrl;
+        $this->chooseUrl    = $chooseUrl;
         $this->notifyUrl    = $notifyUrl;
     }
 
     public function approveAndDeposit(FinancialTransactionInterface $transaction, $retry)
     {
         $request = $this->container->get('request');
+        $logger = $this->container->get('logger');
+
         if ($request->isMethod('POST')) {
             $postData = $request->request->get('data');
             $data = $postData['DATA'];
         }
+        else
+        {
+            $data = $transaction->getExtendedData();
+            $token = $this->obtainSipsCheckoutToken($transaction);
+
+            $actionRequest = new ActionRequiredException('User has not yet chosen his credit card type.');
+            $actionRequest->setFinancialTransaction($transaction);
+            $url = $this->getChooseUrl($data).'?url='.$this->client->getCallPaymentUrl().'&token='.$token;
+            $logger->info('URL:'.$url);
+            $actionRequest->setAction(new VisitUrl($url));
+
+            throw $actionRequest;
+        }
+
         // $form = $this->container->get('form.factory')->createFormBuilder()
         //     ->add('DATA', 'text')
         //     ->getForm();
@@ -86,89 +108,87 @@ class SipsCheckoutPlugin extends AbstractPlugin
         //     $data = $form->getData();
         // }
 
-        $data = $transaction->getExtendedData();
 
-        $token = $this->obtainSipsCheckoutToken($transaction, $paymentAction);
 
         // $details = $this->client->requestGetExpressCheckoutDetails($token);
         // $this->throwUnlessSuccessResponse($details, $transaction);
 
-        // verify checkout status
-        switch ($details->body->get('CHECKOUTSTATUS')) {
-            case 'PaymentActionFailed':
-                $ex = new FinancialException('PaymentAction failed.');
-                $transaction->setResponseCode('Failed');
-                $transaction->setReasonCode('PaymentActionFailed');
-                $ex->setFinancialTransaction($transaction);
+        // // verify checkout status
+        // switch ($details->body->get('CHECKOUTSTATUS')) {
+        //     case 'PaymentActionFailed':
+        //         $ex = new FinancialException('PaymentAction failed.');
+        //         $transaction->setResponseCode('Failed');
+        //         $transaction->setReasonCode('PaymentActionFailed');
+        //         $ex->setFinancialTransaction($transaction);
 
-                throw $ex;
+        //         throw $ex;
 
-            case 'PaymentCompleted':
-                break;
+        //     case 'PaymentCompleted':
+        //         break;
 
-            case 'PaymentActionNotInitiated':
-                break;
+        //     case 'PaymentActionNotInitiated':
+        //         break;
 
-            default:
-                $actionRequest = new ActionRequiredException('User has not yet authorized the transaction.');
-                $actionRequest->setFinancialTransaction($transaction);
-                $actionRequest->setAction(new VisitUrl($this->client->getAuthenticateExpressCheckoutTokenUrl($token)));
+        //     default:
+        //         $actionRequest = new ActionRequiredException('User has not yet authorized the transaction.');
+        //         $actionRequest->setFinancialTransaction($transaction);
+        //         $actionRequest->setAction(new VisitUrl($this->client->getAuthenticateExpressCheckoutTokenUrl($token)));
 
-                throw $actionRequest;
-        }
+        //         throw $actionRequest;
+        // }
 
-        // complete the transaction
-        $data->set('sips_payer_id', $details->body->get('PAYERID'));
+        // // complete the transaction
+        // $data->set('sips_payer_id', $details->body->get('PAYERID'));
 
-        $opts = $data->has('checkout_params') ? $data->get('checkout_params') : array();
-        $opts['PAYMENTREQUEST_0_CURRENCYCODE'] = $transaction->getPayment()->getPaymentInstruction()->getCurrency();
+        // $opts = $data->has('checkout_params') ? $data->get('checkout_params') : array();
+        // $opts['PAYMENTREQUEST_0_CURRENCYCODE'] = $transaction->getPayment()->getPaymentInstruction()->getCurrency();
 
-        if ($data->has('checkout_items'))
-        {
-            $itemsAmount = 0.00;
-            $idx = 0;
-            foreach($data->get('checkout_items') as $item)
-            {
-                $opts['L_PAYMENTREQUEST_0_ITEMCATEGORY' . $idx] = $item['category'];
-                $opts['L_PAYMENTREQUEST_0_NAME' . $idx] = $item['label'];
-                $opts['L_PAYMENTREQUEST_0_QTY' . $idx] = $item['quantity'];
-                $opts['L_PAYMENTREQUEST_0_AMT' . $idx] = $item['unit_price'];
-                $itemsAmount += $item['unit_price'] * $item['quantity'];
-                $idx++;
-            }
-            $opts['PAYMENTREQUEST_0_ITEMAMT'] = $itemsAmount;
-        }
-        $response = $this->client->requestDoExpressCheckoutPayment(
-            $data->get('sips_checkout_token'),
-            $transaction->getRequestedAmount(),
-            $paymentAction,
-            $details->body->get('PAYERID'),
-            $opts
-        );
-        $this->throwUnlessSuccessResponse($response, $transaction);
+        // if ($data->has('checkout_items'))
+        // {
+        //     $itemsAmount = 0.00;
+        //     $idx = 0;
+        //     foreach($data->get('checkout_items') as $item)
+        //     {
+        //         $opts['L_PAYMENTREQUEST_0_ITEMCATEGORY' . $idx] = $item['category'];
+        //         $opts['L_PAYMENTREQUEST_0_NAME' . $idx] = $item['label'];
+        //         $opts['L_PAYMENTREQUEST_0_QTY' . $idx] = $item['quantity'];
+        //         $opts['L_PAYMENTREQUEST_0_AMT' . $idx] = $item['unit_price'];
+        //         $itemsAmount += $item['unit_price'] * $item['quantity'];
+        //         $idx++;
+        //     }
+        //     $opts['PAYMENTREQUEST_0_ITEMAMT'] = $itemsAmount;
+        // }
+        // $response = $this->client->requestDoExpressCheckoutPayment(
+        //     $data->get('sips_checkout_token'),
+        //     $transaction->getRequestedAmount(),
+        //     $paymentAction,
+        //     $details->body->get('PAYERID'),
+        //     $opts
+        // );
+        // $this->throwUnlessSuccessResponse($response, $transaction);
 
-        switch($response->body->get('PAYMENTINFO_0_PAYMENTSTATUS')) {
-            case 'Completed':
-                break;
+        // switch($response->body->get('PAYMENTINFO_0_PAYMENTSTATUS')) {
+        //     case 'Completed':
+        //         break;
 
-            case 'Pending':
-                $transaction->setReferenceNumber($response->body->get('PAYMENTINFO_0_TRANSACTIONID'));
+        //     case 'Pending':
+        //         $transaction->setReferenceNumber($response->body->get('PAYMENTINFO_0_TRANSACTIONID'));
                 
-                throw new PaymentPendingException('Payment is still pending: '.$response->body->get('PAYMENTINFO_0_PENDINGREASON'));
+        //         throw new PaymentPendingException('Payment is still pending: '.$response->body->get('PAYMENTINFO_0_PENDINGREASON'));
 
-            default:
-                $ex = new FinancialException('PaymentStatus is not completed: '.$response->body->get('PAYMENTINFO_0_PAYMENTSTATUS'));
-                $ex->setFinancialTransaction($transaction);
-                $transaction->setResponseCode('Failed');
-                $transaction->setReasonCode($response->body->get('PAYMENTINFO_0_PAYMENTSTATUS'));
+        //     default:
+        //         $ex = new FinancialException('PaymentStatus is not completed: '.$response->body->get('PAYMENTINFO_0_PAYMENTSTATUS'));
+        //         $ex->setFinancialTransaction($transaction);
+        //         $transaction->setResponseCode('Failed');
+        //         $transaction->setReasonCode($response->body->get('PAYMENTINFO_0_PAYMENTSTATUS'));
 
-                throw $ex;
-        }
+        //         throw $ex;
+        // }
 
-        $transaction->setReferenceNumber($response->body->get('PAYMENTINFO_0_TRANSACTIONID'));
-        $transaction->setProcessedAmount($response->body->get('PAYMENTINFO_0_AMT'));
-        $transaction->setResponseCode(PluginInterface::RESPONSE_CODE_SUCCESS);
-        $transaction->setReasonCode(PluginInterface::REASON_CODE_SUCCESS);
+        // $transaction->setReferenceNumber($response->body->get('PAYMENTINFO_0_TRANSACTIONID'));
+        // $transaction->setProcessedAmount($response->body->get('PAYMENTINFO_0_AMT'));
+        // $transaction->setResponseCode(PluginInterface::RESPONSE_CODE_SUCCESS);
+        // $transaction->setReasonCode(PluginInterface::REASON_CODE_SUCCESS);
     }
 
     public function processes($paymentSystemName)
@@ -181,7 +201,7 @@ class SipsCheckoutPlugin extends AbstractPlugin
         return false;
     }
 
-    /**
+     /**
      * @param \JMS\Payment\CoreBundle\Model\FinancialTransactionInterface $transaction
      * @return string
      */
@@ -230,22 +250,25 @@ class SipsCheckoutPlugin extends AbstractPlugin
         // $transaction->setTrackingId($trackingId);
         // $this->container->get('logger')->info('session: '.$transaction->getTrackingId());    
 
-        // $response = $this->client->requestGetToken($service, $trackingId, $subscription, $this->container->get('logger'));
         $amount = $transaction->getRequestedAmount();
         $currency = $transaction->getPayment()->getPaymentInstruction()->getCurrency();
 
         $response = $this->client->requestGetCheckoutToken($amount, $currency, $opts);
         $this->throwUnlessSuccessResponse($response, $transaction);
 
-        $token = $response->body->get('message');
-        $data->set('sips_checkout_token', $token);
+
+        // Extract encrypted string
+        preg_match('/VALUE="([^"]+)"/i', $response->body->get('message'), $matches);
+        $encrypted = $matches[1];
+
+        $data->set('sips_checkout_token', $encrypted);
 
         // $transaction->setState(FinancialTransactionInterface::STATE_PENDING);
 
-        return $token;
+        return $encrypted;
     }
 
-    /**
+   /**
      * @param \JMS\Payment\CoreBundle\Model\FinancialTransactionInterface $transaction
      * @param \JMS\Payment\SipsBundle\Client\Response $response
      * @return null
@@ -288,6 +311,18 @@ class SipsCheckoutPlugin extends AbstractPlugin
         }
 
         throw new \RuntimeException('You must configure a cancellation url.');
+    }
+
+    protected function getChooseUrl(ExtendedDataInterface $data)
+    {
+        if ($data->has('choose_card_url')) {
+            return $data->get('choose_card_url');
+        }
+        else if (0 !== strlen($this->chooseUrl)) {
+            return $this->chooseUrl;
+        }
+
+        throw new \RuntimeException('You must configure a url to let the user choose his credit card type.');
     }
 
     protected function getNotifyUrl(ExtendedDataInterface $data)

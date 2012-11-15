@@ -87,12 +87,12 @@ class Response
 
     public function isSuccess()
     {
-        return self::CODE_OK === $this->body->get('code');
+        return self::CODE_OK == $this->body->get('code');
     }
 
     public function isError()
     {
-        return self::CODE_ERROR === $this->body->get('code');
+        return self::CODE_ERROR == $this->body->get('code');
     }
 
     public function getResponseCode()
