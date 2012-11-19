@@ -82,33 +82,74 @@ class SipsCheckoutPlugin extends AbstractPlugin
         $logger = $this->container->get('logger');
 
         if ($request->isMethod('POST')) {
-            $postData = $request->request->get('data');
-            $data = $postData['DATA'];
+            $data = $request->get('DATA');
+
+            $response = $this->client->requestDoCheckoutPayment($data);
+            $this->throwUnlessSuccessResponse($response, $transaction);
+
+            $logger->info('RESPONSE_CODE: '.$response->body->get('response_code'));
+            switch ($response->body->get('response_code')) {
+                case '00':      // Autorisation acceptée
+                    $transaction->setReferenceNumber($response->body->get('transaction_id'));
+                    $transaction->setProcessedAmount($this->client->convertAmountFromSipsFormat($response->body->get('amount'), $response->body->get('currency_code')));
+                    $transaction->setResponseCode(PluginInterface::RESPONSE_CODE_SUCCESS);
+                    $transaction->setReasonCode(PluginInterface::REASON_CODE_SUCCESS);
+                    break;
+                
+                case '17':      // Annulation de l'internaute
+                    $ex = new PaymentPendingException('PaymentAction cancelled.');
+                    $transaction->setReferenceNumber($response->body->get('transaction_id'));
+                    $transaction->setResponseCode('Cancelled');
+                    $transaction->setReasonCode($response->body->get('response_code').': '.$response->body->get('complementary_info'));
+                    $ex->setFinancialTransaction($transaction);
+                    throw $ex;
+                    break;
+                
+                case '02':      // Dépassement de plafond. Forçage possible par téléphone (selon contrat)
+                case '05':      // Autorisation refusée
+                    $ex = new FinancialException('PaymentAction failed.');
+                    $transaction->setReferenceNumber($response->body->get('transaction_id'));
+                    $transaction->setResponseCode('Failed');
+                    $transaction->setReasonCode($response->body->get('response_code').': '.$response->body->get('complementary_info'));
+                    $ex->setFinancialTransaction($transaction);
+                    throw $ex;
+                
+                case '34':      // Suspicion de fraude
+                case '75':      // Nombre de tentatives de saisie du numéro de carte dépassé
+                    $ex = new FinancialException('PaymentAction failed.');
+                    $transaction->setReferenceNumber($response->body->get('transaction_id'));
+                    $transaction->setResponseCode('Failed');
+                    $transaction->setReasonCode($response->body->get('response_code').': '.$response->body->get('complementary_info'));
+                    $ex->setFinancialTransaction($transaction);
+                    throw $ex;
+                
+                case '03':      // Champ merchant_id invalide ou contrat VAD inexistant
+                case '12':      // Transaction invalide : vérifier les paramètres de la requête
+                case '30':      // Erreur de format
+                case '90':      // Service temporairement indisponible
+                default:
+                    $ex = new InternalErrorException('PaymentAction failed.');
+                    $transaction->setReferenceNumber($response->body->get('transaction_id'));
+                    $transaction->setResponseCode('Failed');
+                    $transaction->setReasonCode($response->body->get('response_code').': '.$response->body->get('complementary_info'));
+                    $ex->setFinancialTransaction($transaction);
+                    throw $ex;
+            }
         }
         else
         {
+            $logger->info('CHOOSE_CREDIT_CARD');
+
             $data = $transaction->getExtendedData();
             $token = $this->obtainSipsCheckoutToken($transaction);
 
             $actionRequest = new ActionRequiredException('User has not yet chosen his credit card type.');
             $actionRequest->setFinancialTransaction($transaction);
-            $url = $this->getChooseUrl($data).'?url='.$this->client->getCallPaymentUrl().'&token='.$token;
-            $logger->info('URL:'.$url);
+            $url = $this->getChooseUrl($data).'?url='.urlencode($this->client->getCallPaymentUrl()).'&token='.$token;
             $actionRequest->setAction(new VisitUrl($url));
 
             throw $actionRequest;
         }
-
-        // $form = $this->container->get('form.factory')->createFormBuilder()
-        //     ->add('DATA', 'text')
-        //     ->getForm();
-
-        // if ($request->isMethod('POST')) {
-        //     $form->bind($request);
-        //     $data = $form->getData();
-        // }
-
-
 
         // $details = $this->client->requestGetExpressCheckoutDetails($token);
         // $this->throwUnlessSuccessResponse($details, $transaction);
@@ -245,10 +286,6 @@ class SipsCheckoutPlugin extends AbstractPlugin
     //      $parm="$parm advert=";
     //      $parm="$parm background_id=";
     //      $parm="$parm templatefile=";
-
-        // $trackingId = $this->getTrackingId();
-        // $transaction->setTrackingId($trackingId);
-        // $this->container->get('logger')->info('session: '.$transaction->getTrackingId());    
 
         $amount = $transaction->getRequestedAmount();
         $currency = $transaction->getPayment()->getPaymentInstruction()->getCurrency();

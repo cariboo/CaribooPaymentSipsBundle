@@ -29,8 +29,25 @@ class Client
     private $currencies = array(
         'EUR' => '978',         // Euro
         'USD' => '840',         // US Dollar
+        'CHF' => '756',         // Swiss Franc
+        'GBP' => '826',         // Pound Sterling
+        'CAD' => '124',         // Canadian Dollar
         'JPY' => '392',         // Yen
-        'GBP' => '826'          // Pound Sterling
+        'MXN' => '484',         // Mexican Peso
+        'TRY' => '949',         // Yeni Türk Liras
+        'AUD' => '036',         // Australian Dollar
+        'NZD' => '554',         // New Zealand Dollar
+        'NOK' => '578',         // Norwegian Krone
+        'BRL' => '986',         // Brazilian Real
+        'ARS' => '032',         // Argentine Peso
+        'KHR' => '116',         // Riel
+        'TWD' => '901',         // New Taiwan Dollar
+        'SEK' => '752',         // Swedish Krona
+        'DKK' => '208',         // Danish Krone
+        'KRW' => '410',         // Won
+        'SGD' => '702',         // Singapore Dollar
+        'XPF' => '953',         // CFP Franc
+        'XOF' => '952',         // CFA Franc BCEAO
     );
 
     protected $merchantId;      // Merchant ID assigned by SIPS
@@ -65,7 +82,7 @@ class Client
             "merchant_id"       => $this->merchantId,
             "merchant_country"  => $this->country,
             "pathfile"          => $this->pathfile,
-            "amount"            => $this->convertAmountToSipsFormat($amount),
+            "amount"            => $this->convertAmountToSipsFormat($amount, $currency),
             "currency_code"     => $this->getCurrencyCode($currency)
         )));
     }
@@ -110,14 +127,47 @@ class Client
     }
 
     /**
-     * Convert amounts in the format waited by Sips
+     * Convert amounts from the SIPS format
+     *
+     * @param string $amount
+     * @param string $currency
+     * @return float
+     */
+    public function convertAmountFromSipsFormat($amount, $currency)
+    {
+        switch ($currency) {
+            case '392':     // Yen
+            case '410':     // Won
+            case '953':     // CFP Franc
+            case '952':     // CFA Franc BCEAO
+                return $amount;
+                break;
+            default:
+                return $amount / 100;
+                break;
+        }
+    }
+
+    /**
+     * Convert amounts in the format waited by SIPS
      *
      * @param float $amount
+     * @param string $currency
      * @return string
      */
-    protected function convertAmountToSipsFormat($amount)
+    public function convertAmountToSipsFormat($amount, $currency)
     {
-        return number_format($amount * 100, 0, '.', '');
+        switch ($currency) {
+            case 'JPY':     // Yen
+            case 'KRW':     // Won
+            case 'XPF':     // CFP Franc
+            case 'XOF':     // CFA Franc BCEAO
+                return number_format($amount, 0, '.', '');
+                break;
+            default:
+                return number_format($amount * 100, 0, '.', '');
+                break;
+        }
     }
 
     /**
