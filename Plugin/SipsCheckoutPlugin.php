@@ -149,7 +149,7 @@ class SipsCheckoutPlugin extends AbstractPlugin
         $opts['cancel_return_url'] = $this->getCancelUrl($data);
         $opts['automatic_response_url'] = $this->getNotifyUrl($data);
         $opts['order_id'] = $data->get('order_id');
-        $opts['data'] = $data->get('tracking_id');
+        $opts['caddie'] = $data->get('tracking_id');
 
         // SIPS default transaction Id should not be used (based on time : can't manage more than 1 transaction per second !)
         if ($data->has('transaction_id')) {
