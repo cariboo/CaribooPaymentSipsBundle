@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<phpunit bootstrap="./Tests/bootstrap.php">
+<phpunit bootstrap="./vendor/autoload.php">
     <testsuites>
         <testsuite name="CaribooPaymentSipsBundle">
             <directory suffix="Test.php">./Tests</directory>
@@ -8,9 +8,11 @@
     </testsuites>
 
     <php>
-        <!-- Sandbox Credentials only :) -->
-        <!--server name="API_USERNAME" value="schmit_1283340315_biz_api1.gmail.com" />
-        <server name="API_PASSWORD" value="1283340321" />
-        <server name="API_SIGNATURE" value="A93vj6VJ.ZIRNjbI6GFgi4N2Km.5ATLs-EinlyWk2htEGX0xc3L8YIBo" /-->
+        <!-- Sandbox Credentials only :) : to customize with your API paths ! -->
+        <server name="MERCHANT_ID" value="011223344551111" />
+        <server name="MERCHANT_COUNTRY" value="fr" />
+        <server name="PATHFILE" value="/var/www/com.bebe-nounou/app/config/sips/pathfile" />
+        <server name="REQUEST_PATH" value="/var/www/com.bebe-nounou/bin/sips/glibc-2.5-42/request" />
+        <server name="RESPONSE_PATH" value="/var/www/com.bebe-nounou/bin/sips/glibc-2.5-42/response" />
     </php>
 </phpunit>

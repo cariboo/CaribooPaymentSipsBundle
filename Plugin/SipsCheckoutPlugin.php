@@ -85,6 +85,8 @@ class SipsCheckoutPlugin extends AbstractPlugin
 
         if ($request->isMethod('POST')) {
             $data = $request->get('DATA');
+$logger = $this->container->get('logger');
+$logger->info($data);
 
             // Process the transaction
             $response = $this->client->requestDoCheckoutPayment($data);
@@ -150,6 +152,7 @@ class SipsCheckoutPlugin extends AbstractPlugin
         $opts['automatic_response_url'] = $this->getNotifyUrl($data);
         $opts['order_id'] = $data->get('order_id');
         $opts['caddie'] = $data->get('tracking_id');
+        $opts['data'] = "<USE_CSS>;http://www.bebe-nounou.com/css/iphone.css</USE_CSS>;";
 
         // SIPS default transaction Id should not be used (based on time : can't manage more than 1 transaction per second !)
         if ($data->has('transaction_id')) {
@@ -193,12 +196,10 @@ class SipsCheckoutPlugin extends AbstractPlugin
 
 
         // Extract encrypted string
-        preg_match('/VALUE="([^"]+)"/i', $response->body->get('message'), $matches);
+        preg_match('/DATA VALUE="([^"]+)"/i', $response->body->get('message'), $matches);
         $encrypted = $matches[1];
 
         $data->set('sips_checkout_token', $encrypted);
-
-        // $transaction->setState(FinancialTransactionInterface::STATE_PENDING);
 
         return $encrypted;
     }
