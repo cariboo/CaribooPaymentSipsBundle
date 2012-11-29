@@ -85,8 +85,6 @@ class SipsCheckoutPlugin extends AbstractPlugin
 
         if ($request->isMethod('POST')) {
             $data = $request->get('DATA');
-$logger = $this->container->get('logger');
-$logger->info($data);
 
             // Process the transaction
             $response = $this->client->requestDoCheckoutPayment($data);
@@ -107,13 +105,13 @@ $logger->info($data);
         }
     }
 
-    public function processNotify(Request $request)
+    public function getNotify(Request $request)
     {
         $data = $request->request->get('DATA');
 
-        // Process the transaction
+        // Uncrypt the information
         $response = $this->client->requestDoCheckoutPayment($data);
-
+        
         return $response;
     }
 
@@ -152,7 +150,7 @@ $logger->info($data);
         $opts['automatic_response_url'] = $this->getNotifyUrl($data);
         $opts['order_id'] = $data->get('order_id');
         $opts['caddie'] = $data->get('tracking_id');
-        $opts['data'] = "<USE_CSS>;http://www.bebe-nounou.com/css/iphone.css</USE_CSS>;";
+        $opts['data'] = "<USE_CSS>;http://www.bebe-nounou.com/css/mobile.css</USE_CSS>;NO_DISPLAY_CANCEL;NO_SSL_SYMBOLS;NO_WINDOWS_MSG;NO_RESPONSE_PAGE;NO_COPYRIGHT";
 
         // SIPS default transaction Id should not be used (based on time : can't manage more than 1 transaction per second !)
         if ($data->has('transaction_id')) {
