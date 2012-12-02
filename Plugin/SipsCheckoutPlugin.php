@@ -150,7 +150,9 @@ class SipsCheckoutPlugin extends AbstractPlugin
         $opts['automatic_response_url'] = $this->getNotifyUrl($data);
         $opts['order_id'] = $data->get('order_id');
         $opts['caddie'] = $data->get('tracking_id');
-        $opts['data'] = "<USE_CSS>;http://www.bebe-nounou.com/css/mobile.css</USE_CSS>;NO_DISPLAY_CANCEL;NO_SSL_SYMBOLS;NO_WINDOWS_MSG;NO_RESPONSE_PAGE;NO_COPYRIGHT";
+        // $opts['data'] = "NO_DISPLAY_CANCEL;NO_SSL_SYMBOLS;NO_WINDOWS_MSG;NO_RESPONSE_PAGE;NO_COPYRIGHT";
+        $opts['data'] = "<USE_CSS>;mobile.css</USE_CSS>;NO_DISPLAY_CANCEL;NO_SSL_SYMBOLS;NO_WINDOWS_MSG;NO_RESPONSE_PAGE;NO_COPYRIGHT";
+        // $opts['data'] = "<USE_CSS>;http://www.bebe-nounou.com/css/mobile.css</USE_CSS>;NO_DISPLAY_CANCEL;NO_SSL_SYMBOLS;NO_WINDOWS_MSG;NO_RESPONSE_PAGE;NO_COPYRIGHT";
 
         // SIPS default transaction Id should not be used (based on time : can't manage more than 1 transaction per second !)
         if ($data->has('transaction_id')) {

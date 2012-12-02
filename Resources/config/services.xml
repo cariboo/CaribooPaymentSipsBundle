@@ -18,6 +18,7 @@
         <parameter key="payment.sips.pathfile"></parameter>
         <parameter key="payment.sips.request_path"></parameter>
         <parameter key="payment.sips.response_path"></parameter>
+        <parameter key="payment.sips.debug"></parameter>
 
         <parameter key="payment.form.sips_checkout_type.class">Cariboo\Payment\SipsBundle\Form\SipsCheckoutType</parameter>
     </parameters>
